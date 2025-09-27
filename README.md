@@ -1,6 +1,7 @@
 # 🚀 AT&T Detailed Order Status Checker
 
-![AT&T Checker]([[screenshot.png](https://i.ibb.co/spMwcV2c/Screenshot-2025-09-27-122941.png)])  
+![AT&T Checker](https://i.ibb.co/spMwcV2c/Screenshot-2025-09-27-122941.png)
+
 
 A fast, secure, and user-friendly web tool to track AT&T orders in real-time. This tool allows users to check the status of their AT&T orders using the **Order ID, ZIP code, and account holder's last name**.
 
