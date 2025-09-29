@@ -1,16 +1,24 @@
 {
   "name": "att-order-checker-proxy",
   "version": "1.0.0",
-  "description": "Proxy server for AT&T Order Checker.",
+  "description": "Proxy server for fetching AT&T order details.",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
   },
   "dependencies": {
-    "express": "^4.18.2",
-    "node-fetch": "^2.6.9"
+    "express": "^4.19.2",
+    "node-fetch": "^2.6.7",
+    "cheerio": "^1.0.0-rc.12"
   },
   "engines": {
-    "node": ">=16.0.0"
-  }
+    "node": ">=14.0.0"
+  },
+  "keywords": [
+    "att",
+    "proxy",
+    "node"
+  ],
+  "author": "",
+  "license": "ISC"
 }
