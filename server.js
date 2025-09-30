@@ -1,11 +1,11 @@
 const express = require('express');
 const fetch = require('node-fetch');
-// Necesitarás instalar cheerio en tu proyecto de Railway: npm install cheerio
 const cheerio = require('cheerio'); 
 
 const app = express();
-const PORT = process.env.PORT || 3001; // Usar process.env.PORT es mejor en Railway
+const PORT = process.env.PORT || 3001; 
 
+// Configuración de CORS
 app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');
   res.header('Access-Control-Allow-Methods', 'POST, GET, OPTIONS');
@@ -21,10 +21,13 @@ app.get('/myorders/details', async (req, res) => {
   const targetUrl = 'https://www.att.com/myorders/details';
   const apiEndpoint = 'https://www.att.com/msapi/orderstatus/v1/getOrderDetail';
 
-  const { orderid, zip, lastName } = req.query;
+  // --- CORRECCIÓN AQUÍ: Ahora capturamos 'appid' de los query parameters ---
+  const { orderid, zip, lastName, appid } = req.query;
 
-  if (!orderid || !zip || !lastName) {
-    return res.status(400).json({ error: 'Missing required parameters.' });
+  if (!orderid || !zip || !lastName || !appid) {
+    return res.status(400).json({ 
+        error: 'Missing required parameters. Make sure to provide orderid, zip, lastName, and appid.' 
+    });
   }
 
   // --- FASE 1: Obtener Token y Cookies de la página ---
@@ -43,39 +46,23 @@ app.get('/myorders/details', async (req, res) => {
     // 1. Capturar Cookies
     const setCookieHeader = htmlResponse.headers.get('set-cookie');
     if (setCookieHeader) {
-        // Simple parsing: unir las cookies con '; '
         const cookieArray = setCookieHeader.split(/, (?=\w+=)/).map(c => c.split(';')[0]);
         cookies = cookieArray.join('; ');
-        //console.log('[FASE 1] Cookies capturadas:', cookies); 
     }
     
-    // 2. Capturar X-CSRF-Token (viene en un header de respuesta si la página lo envía en el primero)
-    // El token puede venir en el header o en el HTML. Revisamos el header primero.
-    const csrfFromHeader = htmlResponse.headers.get('x-csrf-token');
-    if (csrfFromHeader) {
-        csrfToken = csrfFromHeader;
-        //console.log('[FASE 1] CSRF Token capturado del Header:', csrfToken); 
-    }
+    // 2. Capturar X-CSRF-Token (Buscar en headers o HTML)
+    csrfToken = htmlResponse.headers.get('x-csrf-token');
 
-    // Si el token no viene en el header, lo buscamos en el HTML (método más seguro)
     if (!csrfToken) {
         const htmlText = await htmlResponse.text();
         const $ = cheerio.load(htmlText);
-        // Buscar en las etiquetas meta o scripts que contengan el token
-        // Esto depende de cómo AT&T lo inyecte. Asumiremos que está en una meta tag.
-        // Si no funciona, esta línea debe ser ajustada buscando el lugar real del token en el HTML.
+        // Búsqueda común de token en meta tag, puede requerir ajuste si AT&T cambia la estructura
         csrfToken = $('meta[name="csrf-token"]').attr('content') || null;
-
-        // Si tampoco está en meta, probamos a buscarlo en los headers de la respuesta del GET
-        if (!csrfToken && htmlResponse.headers.get('x-csrf-token')) {
-            csrfToken = htmlResponse.headers.get('x-csrf-token');
-        }
-
-        if (!csrfToken) {
-             console.error('[FASE 1] No se pudo encontrar el X-CSRF-Token en el HTML.');
-        }
     }
 
+    if (!csrfToken) {
+         console.error('[FASE 1] No se pudo encontrar el X-CSRF-Token.');
+    }
 
   } catch (error) {
     console.error('[FASE 1] Error en la petición GET (Scraping):', error);
@@ -93,7 +80,8 @@ app.get('/myorders/details', async (req, res) => {
     "zipCode": zip,
     "isAuth": false,
     "fromDeepLink": true,
-    "appId": "omhub",
+    // --- CORRECCIÓN AQUÍ: Usar la variable 'appid' capturada de la URL ---
+    "appId": appid, 
     "lastName": lastName,
     "emailAddress": ""
   };
@@ -104,7 +92,7 @@ app.get('/myorders/details', async (req, res) => {
       headers: {
         'Content-Type': 'application/json',
         'Accept': 'application/json, text/plain, */*', 
-        'Referer': targetUrl, // La página de donde se obtuvo el token
+        'Referer': targetUrl, 
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/100.0.4896.127 Safari/537.36',
         'Origin': 'https://www.att.com',
         // ENCABEZADOS DINÁMICOS OBTENIDOS DEL PASO 1
