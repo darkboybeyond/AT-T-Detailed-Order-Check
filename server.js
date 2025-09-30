@@ -1,6 +1,6 @@
 const express = require('express');
 const fetch = require('node-fetch');
-const cheerio = require('cheerio'); 
+const cheerio = require('cheerio'); // Requiere la dependencia instalada
 
 const app = express();
 const PORT = process.env.PORT || 3001; 
@@ -21,7 +21,7 @@ app.get('/myorders/details', async (req, res) => {
   const targetUrl = 'https://www.att.com/myorders/details';
   const apiEndpoint = 'https://www.att.com/msapi/orderstatus/v1/getOrderDetail';
 
-  // --- CORRECCIÓN AQUÍ: Ahora capturamos 'appid' de los query parameters ---
+  // Extraer todos los parámetros necesarios, incluyendo 'appid'
   const { orderid, zip, lastName, appid } = req.query;
 
   if (!orderid || !zip || !lastName || !appid) {
@@ -30,7 +30,7 @@ app.get('/myorders/details', async (req, res) => {
     });
   }
 
-  // --- FASE 1: Obtener Token y Cookies de la página ---
+  // --- FASE 1: Obtener Token y Cookies de la página (Scraping) ---
   let csrfToken = null;
   let cookies = '';
   
@@ -56,7 +56,7 @@ app.get('/myorders/details', async (req, res) => {
     if (!csrfToken) {
         const htmlText = await htmlResponse.text();
         const $ = cheerio.load(htmlText);
-        // Búsqueda común de token en meta tag, puede requerir ajuste si AT&T cambia la estructura
+        // Búsqueda común de token en meta tag
         csrfToken = $('meta[name="csrf-token"]').attr('content') || null;
     }
 
@@ -80,8 +80,7 @@ app.get('/myorders/details', async (req, res) => {
     "zipCode": zip,
     "isAuth": false,
     "fromDeepLink": true,
-    // --- CORRECCIÓN AQUÍ: Usar la variable 'appid' capturada de la URL ---
-    "appId": appid, 
+    "appId": appid, // Usamos 'appid' dinámicamente
     "lastName": lastName,
     "emailAddress": ""
   };
@@ -102,9 +101,8 @@ app.get('/myorders/details', async (req, res) => {
       body: JSON.stringify(requestBody)
     });
 
-    const data = await apiResponse.json();
-
     // Reenviar la respuesta a tu frontend
+    const data = await apiResponse.json();
     res.status(apiResponse.status).json(data);
 
   } catch (error) {
