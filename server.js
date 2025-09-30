@@ -1,117 +1,81 @@
-const express = require('express');
-const fetch = require('node-fetch');
-const cheerio = require('cheerio'); 
+// api/myorders/details.js (Vercel Serverless Function)
 
-const app = express();
-// 🔥 CORRECCIÓN CRÍTICA PARA RAILWAY: Usar process.env.PORT.
-// Si no se usa, Railway no puede conectarse a tu app y da 502.
-const PORT = process.env.PORT || 3001; 
+// Reemplazamos 'express' por el handler de Vercel y usamos el fetch nativo de Node.js (Vercel)
+// Si tu runtime es muy antiguo, puedes usar 'const fetch = require('node-fetch');' 
+// y asegurar que 'node-fetch' está en tu package.json.
+// Usaremos la versión nativa (global) de fetch que Vercel garantiza. 
 
-// Configuración de CORS
-app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', '*');
-  res.header('Access-Control-Allow-Methods', 'POST, GET, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Content-Type');
-  if (req.method === 'OPTIONS') {
-    return res.status(200).send();
-  }
-  next();
-});
+module.exports = async (req, res) => {
+    // 1. Configuración de CORS
+    // Vercel maneja CORS, pero incluimos los headers para replicar la lógica original
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'POST, GET, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
-// Este endpoint recibe la petición GET de tu sitio web
-app.get('/myorders/details', async (req, res) => {
-  const targetUrl = 'https://www.att.com/myorders/details';
-  const apiEndpoint = 'https://www.att.com/msapi/orderstatus/v1/getOrderDetail';
-
-  // Extraer todos los parámetros necesarios
-  const { orderid, zip, lastName, appid } = req.query;
-
-  if (!orderid || !zip || !lastName || !appid) {
-    return res.status(400).json({ 
-        error: 'Missing required parameters. Make sure to provide orderid, zip, lastName, and appid.' 
-    });
-  }
-
-  // --- FASE 1: Obtener Token y Cookies de la página (Scraping) ---
-  let csrfToken = null;
-  let cookies = '';
-  
-  try {
-    const htmlResponse = await fetch(targetUrl, {
-      method: 'GET',
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/100.0.4896.127 Safari/537.36',
-        'Referer': 'https://www.att.com/',
-      }
-    });
-
-    // 1. Capturar Cookies
-    const setCookieHeader = htmlResponse.headers.get('set-cookie');
-    if (setCookieHeader) {
-        const cookieArray = setCookieHeader.split(/, (?=\w+=)/).map(c => c.split(';')[0]);
-        cookies = cookieArray.join('; ');
+    // Manejar la petición OPTIONS (preflight)
+    if (req.method === 'OPTIONS') {
+        return res.status(200).send();
     }
     
-    // 2. Capturar X-CSRF-Token (Buscar en headers o HTML)
-    csrfToken = htmlResponse.headers.get('x-csrf-token');
+    // Tu frontend hace una petición GET a este proxy, por eso verificamos GET.
+    if (req.method !== 'GET') {
+        return res.status(405).json({ error: 'Method Not Allowed' });
+    }
+    
+    const apiUrl = 'https://www.att.com/msapi/orderstatus/v1/getOrderDetail';
 
-    if (!csrfToken) {
-        const htmlText = await htmlResponse.text();
-        const $ = cheerio.load(htmlText);
-        csrfToken = $('meta[name="csrf-token"]').attr('content') || null;
+    // En Vercel, req.query es la forma correcta de acceder a los parámetros
+    const { orderid, zip, lastName } = req.query;
+
+    // 2. Validación de parámetros
+    if (!orderid || !zip || !lastName) {
+        console.error('ERROR: Faltan parámetros en la petición del cliente.');
+        return res.status(400).json({ error: 'Missing required parameters.' });
     }
 
-    if (!csrfToken) {
-         console.error('[FASE 1] No se pudo encontrar el X-CSRF-Token.');
+    const requestBody = {
+        "orderId": orderid,
+        "zipCode": zip,
+        "isAuth": false,
+        "fromDeepLink": true,
+        "appId": "omhub",
+        "lastName": lastName,
+        "emailAddress": ""
+    };
+    
+    // 3. Petición al API de AT&T
+    try {
+        // Usamos el fetch global disponible en el runtime de Vercel
+        const response = await fetch(apiUrl, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Referer': 'https://www.att.com/myorders/details',
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/100.0.4896.127 Safari/537.36',
+                'Origin': 'https://www.att.com'  
+            },
+            body: JSON.stringify(requestBody)
+        });
+
+        // 4. Leer la respuesta
+        const data = await response.json();
+
+        // 5. Devolver la respuesta al cliente
+        // Esto reenvía el status original de AT&T (ej. 200, 400, 500)
+        res.status(response.status).json(data);
+
+    } catch (error) {
+        // 🔴 Manejo del error de red/conexión (lo que causó el fallo 500 anterior)
+        console.error('Error al hacer fetch a la API de AT&T:', error.message);
+        res.status(500).json({ 
+            error: 'Failed to fetch from the target API.',
+            details: error.message
+        });
     }
+};
 
-  } catch (error) {
-    console.error('[FASE 1] Error en la petición GET (Scraping):', error);
-    return res.status(503).json({ error: 'Token retrieval failed. AT&T might be blocking the initial request.' }); 
-  }
-
-  if (!csrfToken) {
-    console.error('[PROXY] No se pudo obtener el token, abortando.');
-    return res.status(500).json({ error: 'Token (X-CSRF-Token) could not be retrieved.' });
-  }
-
-  // --- FASE 2: Petición POST a la API con Tokens y Cookies ---
-  const requestBody = {
-    "orderId": orderid,
-    "zipCode": zip,
-    "isAuth": false,
-    "fromDeepLink": true,
-    "appId": appid, // Usamos 'appid' dinámicamente
-    "lastName": lastName,
-    "emailAddress": ""
-  };
-
-  try {
-    const apiResponse = await fetch(apiEndpoint, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json, text/plain, */*', 
-        'Referer': targetUrl, 
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/100.0.4896.127 Safari/537.36',
-        'Origin': 'https://www.att.com',
-        // ENCABEZADOS DINÁMICOS OBTENIDOS DEL PASO 1
-        'X-CSRF-Token': csrfToken, 
-        'Cookie': cookies 
-      },
-      body: JSON.stringify(requestBody)
-    });
-
-    const data = await apiResponse.json();
-    res.status(apiResponse.status).json(data);
-
-  } catch (error) {
-    console.error('[FASE 2] Error al hacer POST a la API de AT&T:', error);
-    res.status(500).json({ error: 'Failed to fetch from the target API (Phase 2).' }); 
-  }
-});
-
-// 🔥 CORRECCIÓN CRÍTICA: Asegurarse de que se usa la variable PORT
-app.listen(PORT, () => {
-  console.log(`[PROXY] Servidor proxy escuchando en el puerto ${PORT}`);
-});
+// Se elimina: 
+// const express = require('express');
+// const app = express();
+// app.listen(PORT, () => { ... }); 
+// Ya que Vercel maneja la ejecución.
