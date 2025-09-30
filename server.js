@@ -1,8 +1,10 @@
 const express = require('express');
 const fetch = require('node-fetch');
-const cheerio = require('cheerio'); // Requiere la dependencia instalada
+const cheerio = require('cheerio'); 
 
 const app = express();
+// 🔥 CORRECCIÓN CRÍTICA PARA RAILWAY: Usar process.env.PORT.
+// Si no se usa, Railway no puede conectarse a tu app y da 502.
 const PORT = process.env.PORT || 3001; 
 
 // Configuración de CORS
@@ -21,7 +23,7 @@ app.get('/myorders/details', async (req, res) => {
   const targetUrl = 'https://www.att.com/myorders/details';
   const apiEndpoint = 'https://www.att.com/msapi/orderstatus/v1/getOrderDetail';
 
-  // Extraer todos los parámetros necesarios, incluyendo 'appid'
+  // Extraer todos los parámetros necesarios
   const { orderid, zip, lastName, appid } = req.query;
 
   if (!orderid || !zip || !lastName || !appid) {
@@ -56,7 +58,6 @@ app.get('/myorders/details', async (req, res) => {
     if (!csrfToken) {
         const htmlText = await htmlResponse.text();
         const $ = cheerio.load(htmlText);
-        // Búsqueda común de token en meta tag
         csrfToken = $('meta[name="csrf-token"]').attr('content') || null;
     }
 
@@ -66,12 +67,12 @@ app.get('/myorders/details', async (req, res) => {
 
   } catch (error) {
     console.error('[FASE 1] Error en la petición GET (Scraping):', error);
-    return res.status(500).json({ error: 'Failed to complete Phase 1: Token retrieval.' }); 
+    return res.status(503).json({ error: 'Token retrieval failed. AT&T might be blocking the initial request.' }); 
   }
 
   if (!csrfToken) {
-    console.error('[FASE 1] No se pudo obtener el token, abortando.');
-    return res.status(500).json({ error: 'Token (X-CSRF-Token) could not be retrieved from AT&T page.' });
+    console.error('[PROXY] No se pudo obtener el token, abortando.');
+    return res.status(500).json({ error: 'Token (X-CSRF-Token) could not be retrieved.' });
   }
 
   // --- FASE 2: Petición POST a la API con Tokens y Cookies ---
@@ -101,7 +102,6 @@ app.get('/myorders/details', async (req, res) => {
       body: JSON.stringify(requestBody)
     });
 
-    // Reenviar la respuesta a tu frontend
     const data = await apiResponse.json();
     res.status(apiResponse.status).json(data);
 
@@ -111,6 +111,7 @@ app.get('/myorders/details', async (req, res) => {
   }
 });
 
+// 🔥 CORRECCIÓN CRÍTICA: Asegurarse de que se usa la variable PORT
 app.listen(PORT, () => {
   console.log(`[PROXY] Servidor proxy escuchando en el puerto ${PORT}`);
 });
