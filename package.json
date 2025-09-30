@@ -1,19 +1,17 @@
 {
-  "name": "att-order-checker-proxy",
+  "name": "att-order-proxy",
   "version": "1.0.0",
-  "description": "Proxy server for fetching AT&T order details.",
-  "main": "server.js",
+  "description": "Proxy para consulta de pedidos, migrado a Vercel Serverless Function.",
+  "main": "api/myorders/details.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node api/myorders/details.js"
   },
-  "dependencies": {
-    "express": "^4.19.2",
-    "node-fetch": "^2.6.7",
-    "cheerio": "^1.0.0-rc.12"
-  },
-  "engines": {
-    "node": "18.x" 
-  },
+  "keywords": [
+    "vercel",
+    "proxy",
+    "node"
+  ],
   "author": "",
-  "license": "ISC"
+  "license": "ISC",
+  "dependencies": {}
 }
